@@ -22,7 +22,7 @@ THRESHOLDS = [45, 75, 95]
 def check_thresholds(symbol, change):
     for threshold in THRESHOLDS:
         if change >= threshold:
-            send_telegram(f"🚀 {symbol} günlük %{change:.2f} yükseldi! (>{threshold}%)")
+            send_telegram("ALERT: " + symbol + " %" + str(change))
 
 # ------------------ BINANCE ------------------
 
