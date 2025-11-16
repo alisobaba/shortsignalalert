@@ -1,11 +1,8 @@
 import requests
-import json
 import os
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-
-sent_alerts = set()
 
 def send_telegram(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -17,19 +14,18 @@ def check_binance():
     r = requests.get(url).json()
 
     for coin in r:
-        symbol = coin["symbol"]
-        if not symbol.endswith("USDT"):
+        if not isinstance(coin, dict):
             continue
 
-        change = float(coin["priceChangePercent"])
+        symbol = coin.get("symbol", "")
+        change = float(coin.get("priceChangePercent", 0))
 
-        if change >= 50:
-            if symbol not in sent_alerts:
-                msg = f"🔥 {symbol} günlük %{change:.2f} yükseldi!"
-                send_telegram(msg)
-                sent_alerts.add(symbol)
+        if symbol.endswith("USDT") and change >= 50:
+            send_telegram(f"🔥 {symbol} bugün %{change:.2f} yükseldi!")
 
 def main():
+    # Test mesajı → Telegram'a düşecek
+    send_telegram("🚀 TEST: GitHub Actions çalışıyor!")
     check_binance()
 
 if __name__ == "__main__":
