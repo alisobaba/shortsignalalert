@@ -3,12 +3,17 @@ import os
 import json
 import time
 
+# -------------------------------------------------
+# TELEGRAM AYARLARI
+# -------------------------------------------------
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_IDS = os.getenv("CHAT_ID")
+CHAT_ID = os.getenv("CHAT_ID")  # Tek kullanıcı
 
 ALERT_FILE = "sent_alerts.json"
 
-# Hafıza
+# -------------------------------------------------
+# HAFIZA (EŞİKLER İÇİN)
+# -------------------------------------------------
 if os.path.exists(ALERT_FILE):
     with open(ALERT_FILE, "r") as f:
         sent_alerts = json.load(f)
@@ -19,22 +24,30 @@ def save_alerts():
     with open(ALERT_FILE, "w") as f:
         json.dump(sent_alerts, f)
 
-# ---------------------- TELEGRAM ----------------------
-def send_telegram(msg):
+# -------------------------------------------------
+# TELEGRAM GÖNDERİM
+# -------------------------------------------------
+def send_telegram(msg: str):
+    """Tek bir kullanıcıya mesaj gönderir."""
+    if not TELEGRAM_TOKEN or not CHAT_ID:
+        return  # env değişkenleri yoksa sessizce çık
+
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    data = {"chat_id": CHAT_ID, "text": msg}
+    try:
+        requests.post(url, data=data, timeout=10)
+    except Exception as e:
+        print("Telegram error:", e)
 
-    for cid in CHAT_IDS:
-        cid = cid.strip()
-        if not cid:
-            continue
-        requests.post(url, data={"chat_id": cid, "text": msg})
-
-# ---------------------- MEXC ----------------------
+# -------------------------------------------------
+# MEXC API
+# -------------------------------------------------
 def fetch_mexc():
     url = "https://contract.mexc.com/api/v1/contract/ticker"
     try:
         return requests.get(url, timeout=5).json()
-    except:
+    except Exception as e:
+        print("MEXC error:", e)
         return {"success": False, "data": []}
 
 # Eşikler
@@ -47,7 +60,7 @@ def check_mexc():
         return
 
     data = r.get("data", [])
-    
+
     # DEBUG: Kaç coin geldi?
     send_telegram(f"DEBUG: MEXC veri OK. Enstrüman sayısı: {len(data)}")
 
@@ -57,8 +70,8 @@ def check_mexc():
         if not symbol.endswith("_USDT"):
             continue
 
-        symbol_clean = symbol.replace("_", "")
-        change = float(coin.get("riseFallRate", 0))
+        symbol_clean = symbol.replace("_", "")      # LIGHT_USDT -> LIGHTUSDT
+        change = float(coin.get("riseFallRate", 0)) # MEXC zaten % değeri veriyorsa direk kullan
 
         # Sadece %50 üstü takip edilecek
         if change < 50:
@@ -95,7 +108,9 @@ def check_mexc():
                 sent_alerts[symbol_clean][key] = True
                 save_alerts()
 
-# ---------------------- MAIN ----------------------
+# -------------------------------------------------
+# MAIN
+# -------------------------------------------------
 def main():
     check_mexc()
 
