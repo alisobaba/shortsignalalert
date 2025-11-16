@@ -10,19 +10,8 @@ def send_telegram(msg):
     data = {
         "chat_id": CHAT_ID,
         "text": msg,
-        "parse_mode": "MarkdownV2",   # ← TELEGRAM FORMAT KORUMASI
-        "disable_web_page_preview": True
+        "parse_mode": None   # <-- TELEGRAM FORMAT PARSE KAPALI
     }
-    # Telegram'ın özel karakter kaçışları için:
-    safe_msg = (
-        msg.replace("-", "\\-")
-           .replace(".", "\\.")
-           .replace("(", "\\(")
-           .replace(")", "\\)")
-           .replace("%", "\\%")
-           .replace(">", "\\>")
-    )
-    data["text"] = safe_msg
     requests.post(url, data=data)
 
 
