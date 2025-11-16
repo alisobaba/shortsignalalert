@@ -13,7 +13,10 @@ def send_telegram(msg):
         "text": msg,
         "parse_mode": ""
     }
-    requests.post(url, data=data)
+    try:
+        requests.post(url, data=data, timeout=5)
+    except Exception as e:
+        print("[TELEGRAM ERROR]", e, flush=True)
 
 
 # ------------------ EŞİKLER ------------------
@@ -28,7 +31,7 @@ def check_thresholds(symbol, change):
 
     for display, real in THRESHOLDS:
         if change >= real:
-            msg = f"🚀 COIN: {symbol}\n24h Değişim: %{change:.2f}\nEşik: >{display}%"
+            msg = f"🚀 COIN: {symbol}\n24h Change: %{change:.2f}\nThreshold: >{display}%"
             send_telegram(msg)
 
 
@@ -37,25 +40,37 @@ def check_thresholds(symbol, change):
 def fetch_binance():
     print("[FETCH] Binance verisi alınıyor...", flush=True)
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+
     try:
         data = requests.get(url, timeout=5).json()
-        print("[BINANCE RAW SAMPLE]", str(data[:3]), flush=True)
-        return data
+
+        # RATE LIMIT KONTROL
+        if isinstance(data, dict) and "code" in data:
+            print("[BINANCE WARNING] API limit / Error:", data, flush=True)
+            return None
+
+        if isinstance(data, list):
+            print(f"[BINANCE SAMPLE] {len(data)} kayıt geldi", flush=True)
+            return data
+
+        print("[BINANCE ERROR] API beklenmeyen format:", data, flush=True)
+        return None
+
     except Exception as e:
-        print("[BINANCE ERROR]", e, flush=True)
-        return []
+        print("[BINANCE EXCEPTION]", e, flush=True)
+        return None
 
 
 def check_binance():
     data = fetch_binance()
+    if data is None:
+        return
 
     for coin in data:
         if not isinstance(coin, dict):
             continue
 
         symbol = coin.get("symbol", "")
-
-        # sadece USDT perpetual
         if not symbol.endswith("USDT"):
             continue
 
@@ -63,21 +78,22 @@ def check_binance():
 
         print(f"[BINANCE] {symbol}: %{change}", flush=True)
 
-        # Eğer %48 üstü ise → teyit
         if change >= 48:
             print(f"[BINANCE] {symbol} teyit ediliyor...", flush=True)
             time.sleep(2)
 
-            final_data = fetch_binance()
-            match = next((c for c in final_data if c.get("symbol") == symbol), None)
+            data2 = fetch_binance()
+            if data2 is None:
+                continue
+
+            match = next((c for c in data2 if c.get("symbol") == symbol), None)
 
             if match:
                 final_change = float(match.get("priceChangePercent", 0))
-                print(f"[BINANCE CONFIRMED] {symbol}: %{final_change}", flush=True)
+                print(f"[CONFIRMED] {symbol}: %{final_change}", flush=True)
 
                 if final_change >= 48:
                     check_thresholds(symbol, final_change)
-
 
 
 # ------------------ MAIN ------------------
