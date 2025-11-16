@@ -2,7 +2,7 @@ name: MEXC Alerts
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # 15 dakikada bir
+    - cron: "*/15 * * * *"   # 15 dakikada bir çalışsın
   workflow_dispatch:
 
 jobs:
@@ -12,8 +12,6 @@ jobs:
     steps:
     - name: Repo indiriliyor
       uses: actions/checkout@v3
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Python kurulumu
       uses: actions/setup-python@v4
@@ -28,13 +26,3 @@ jobs:
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         CHAT_ID: ${{ secrets.CHAT_ID }}
-
-    - name: Değişiklikleri commit et
-      run: |
-        git config --global user.name "github-actions"
-        git config --global user.email "github-actions@github.com"
-        git add sent_alerts.json
-        git commit -m "update alerts" || echo "No changes"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
