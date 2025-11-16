@@ -2,14 +2,14 @@ name: MEXC Alerts
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # 15 dakikada bir çalışsın
+    - cron: "*/1 * * * *"   # En hızlı: Her 1 dakikada bir
   workflow_dispatch:
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
-
     steps:
+
     - name: Repo indiriliyor
       uses: actions/checkout@v3
 
@@ -22,7 +22,20 @@ jobs:
       run: pip install requests
 
     - name: Scripti çalıştır
-      run: python alerts.py
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        CHAT_ID: ${{ secrets.CHAT_ID }}
+        CHAT_IDS: ${{ secrets.CHAT_IDS }}
+      run: python alerts.py
+
+    - name: Değişiklik yoksa commit etme hatasını engelle
+      run: |
+        if git diff --exit-code sent_alerts.json > /dev/null 2>&1
+        then
+          echo "No changes in sent_alerts.json"
+        else
+          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions"
+          git add sent_alerts.json
+          git commit -m "Update alerts"
+          git push
+        fi
