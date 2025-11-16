@@ -10,13 +10,11 @@ def send_telegram(msg):
     data = {
         "chat_id": CHAT_ID,
         "text": msg,
-        "parse_mode": ""   # format kapalı → her mesaj görünür
+        "parse_mode": ""  # format kapalı
     }
     requests.post(url, data=data)
 
 # ------------------ EŞİKLER ------------------
-# %50 / %75 / %100
-# UI–API farkı için her biri 1–2 puan aşağı alınır (kaçırmamak için)
 THRESHOLDS = [
     (50, 48),
     (75, 73),
@@ -30,7 +28,7 @@ def check_thresholds(symbol, change):
                 f"🚀 {symbol} günlük %{change:.2f} yükseldi! (>{display_treshold}%)"
             )
 
-# ------------------ BINANCE ------------------
+# ------------------ BINANCE FUTURES ------------------
 
 def fetch_binance():
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
@@ -47,12 +45,14 @@ def check_binance():
             continue
 
         symbol = coin.get("symbol", "")
-        if not symbol.endswith("USDT"):
+
+        # SADECE USDT içeren FUTURES coinler
+        if "USDT" not in symbol:
             continue
 
         change = float(coin.get("priceChangePercent", 0))
 
-        # Eğer %48'i görmüşse tekrar doğrulama
+        # Ön alarm
         if change >= 48:
             time.sleep(2)
             final_data = fetch_binance()
@@ -63,7 +63,7 @@ def check_binance():
                 if final_change >= 48:
                     check_thresholds(symbol, final_change)
 
-# ------------------ MEXC ------------------
+# ------------------ MEXC FUTURES ------------------
 
 def fetch_mexc():
     url = "https://contract.mexc.com/api/v1/contract/ticker"
@@ -79,13 +79,13 @@ def check_mexc():
 
     for coin in r.get("data", []):
         symbol = coin.get("symbol", "")
-        if not symbol.endswith("_USDT"):
+
+        if "USDT" not in symbol:
             continue
 
         symbol = symbol.replace("_", "")
         change = float(coin.get("riseFallRate", 0))
 
-        # %48'i görmüşse doğrulama
         if change >= 48:
             time.sleep(2)
             r2 = fetch_mexc()
