@@ -1,117 +1,102 @@
-import os
 import requests
+import os
+import json
+import time
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+CHAT_IDS = os.getenv("CHAT_ID", "").split(",")
 
-MEXC_URL = "https://contract.mexc.com/api/v1/contract/ticker"
+ALERT_FILE = "sent_alerts.json"
 
-# ---------------------------------------------------------------------
-# TELEGRAM
-# ---------------------------------------------------------------------
+# Hafıza
+if os.path.exists(ALERT_FILE):
+    with open(ALERT_FILE, "r") as f:
+        sent_alerts = json.load(f)
+else:
+    sent_alerts = {}
 
-def send_telegram(text: str):
-    """Düz, formatlanmamış metin gönder (en sorunsuz mod)."""
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        return
+def save_alerts():
+    with open(ALERT_FILE, "w") as f:
+        json.dump(sent_alerts, f)
 
+# ---------------------- TELEGRAM ----------------------
+def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {
-        "chat_id": CHAT_ID,
-        "text": text
-    }
+
+    for cid in CHAT_IDS:
+        cid = cid.strip()
+        if not cid:
+            continue
+        requests.post(url, data={"chat_id": cid, "text": msg})
+
+# ---------------------- MEXC ----------------------
+def fetch_mexc():
+    url = "https://contract.mexc.com/api/v1/contract/ticker"
     try:
-        requests.post(url, data=data, timeout=10)
-    except Exception as e:
-        print("Telegram error:", e)
+        return requests.get(url, timeout=5).json()
+    except:
+        return {"success": False, "data": []}
 
-# ---------------------------------------------------------------------
-# MEXC
-# ---------------------------------------------------------------------
-
-def fetch_mexc_tickers():
-    """MEXC futures ticker listesini çeker. Hata olursa [] döner."""
-    try:
-        resp = requests.get(MEXC_URL, timeout=10)
-        data = resp.json()
-    except Exception as e:
-        send_telegram(f"DEBUG: MEXC isteği hata verdi: {e}")
-        return []
-
-    if not data.get("success"):
-        send_telegram(f"DEBUG: MEXC success=False, raw={str(data)[:200]}")
-        return []
-
-    return data.get("data", [])
-
-# ---------------------------------------------------------------------
-# ALARM LOGİĞİ
-# ---------------------------------------------------------------------
-
-# Eşikler (yüzde olarak)
-THRESHOLDS = [50, 80, 100]
+# Eşikler
+THRESHOLDS = {50: "50", 80: "80", 100: "100"}
 
 def check_mexc():
-    tickers = fetch_mexc_tickers()
+    r = fetch_mexc()
 
-    # DEBUG 1: Kaç tane ürün geldi?
-    send_telegram(f"DEBUG: MEXC'ten gelen enstrüman sayısı: {len(tickers)}")
-
-    if not tickers:
+    if r.get("success") != True:
         return
 
-    cleaned = []
-    for c in tickers:
-        sym = c.get("symbol", "")
-        if not sym.endswith("_USDT"):
+    data = r.get("data", [])
+    
+    # DEBUG: Kaç coin geldi?
+    send_telegram(f"DEBUG: MEXC veri OK. Enstrüman sayısı: {len(data)}")
+
+    for coin in data:
+        symbol = coin.get("symbol", "")
+
+        if not symbol.endswith("_USDT"):
             continue
 
-        try:
-            rate = float(c.get("riseFallRate", 0.0))
-        except Exception:
+        symbol_clean = symbol.replace("_", "")
+        change = float(coin.get("riseFallRate", 0))
+
+        # Sadece %50 üstü takip edilecek
+        if change < 50:
             continue
 
-        # MEXC 'rate' genelde 0.72 => %72 gibi. %'ye çevir:
-        pct = rate * 100.0
-        cleaned.append((sym, pct))
+        # Threshold memory yoksa oluştur
+        if symbol_clean not in sent_alerts:
+            sent_alerts[symbol_clean] = {"50": False, "80": False, "100": False}
 
-    if not cleaned:
-        send_telegram("DEBUG: *_USDT kontratı bulunamadı.")
-        return
+        # Anlık doğru ölçüm için 2. kontrol
+        time.sleep(1)
+        r2 = fetch_mexc()
+        if r2.get("success") != True:
+            continue
 
-    # En çok yükselenden az yükselene
-    cleaned.sort(key=lambda x: x[1], reverse=True)
+        match = next((x for x in r2["data"] if x.get("symbol") == symbol), None)
+        if not match:
+            continue
 
-    # DEBUG 2: En çok yükselen ilk 5 coin
-    top_lines = ["DEBUG: MEXC Top 5 (24h change):"]
-    for sym, pct in cleaned[:5]:
-        top_lines.append(f"- {sym}: %{pct:.2f}")
-    send_telegram("\n".join(top_lines))
+        final_change = float(match.get("riseFallRate", 0))
 
-    # ALARM: %50 üstü coinler
-    for sym, pct in cleaned:
-        if pct < 50:
-            break  # liste azalan sıralı, devamı zaten < 50 olur
+        # Eşik tetikleme
+        for threshold in [50, 80, 100]:
+            key = THRESHOLDS[threshold]
 
-        if pct >= 100:
-            level_text = "💥 100%+ SERT PUMP"
-        elif pct >= 80:
-            level_text = "🔥 80%+ GÜÇLÜ PUMP"
-        else:
-            level_text = "⚡ 50%+ PUMP"
+            if final_change >= threshold and not sent_alerts[symbol_clean][key]:
 
-        send_telegram(
-            f"{level_text}\n"
-            f"🎯 Sembol: {sym}\n"
-            f"📈 24h Değişim: %{pct:.2f}"
-        )
+                send_telegram(
+                    f"🔥 %{threshold}+ PUMP\n"
+                    f"🚀 Coin: {symbol_clean}\n"
+                    f"📈 24h Değişim: %{final_change:.2f}"
+                )
 
-# ---------------------------------------------------------------------
-# MAIN
-# ---------------------------------------------------------------------
+                sent_alerts[symbol_clean][key] = True
+                save_alerts()
 
+# ---------------------- MAIN ----------------------
 def main():
-    send_telegram("🛰 MEXC pump radarı çalıştı.")
     check_mexc()
 
 if __name__ == "__main__":
