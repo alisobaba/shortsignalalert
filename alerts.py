@@ -1,53 +1,24 @@
 import requests
 import os
-import json
 import time
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-
-ALERT_FILE = "sent_alerts.json"
-
-# ---------------------- LOAD ALERT MEMORY ----------------------
-
-# Each coin will store: {"50": bool, "80": bool, "100": bool}
-if os.path.exists(ALERT_FILE):
-    with open(ALERT_FILE, "r") as f:
-        sent_alerts = json.load(f)
-else:
-    sent_alerts = {}
-
-def save_alerts():
-    with open(ALERT_FILE, "w") as f:
-        json.dump(sent_alerts, f)
-
-# ---------------------- TELEGRAM ----------------------
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {"chat_id": CHAT_ID, "text": msg}
     requests.post(url, data=data)
 
-# ---------------------- CHECK THRESHOLDS ----------------------
-# Tolerans eklendi → UI 50 = API 45-49 olabilir
+# EŞİKLER (UI–API farkı için toleranslı)
 THRESHOLDS = [45, 75, 95]
 
 def check_thresholds(symbol, change):
-    if symbol not in sent_alerts:
-        sent_alerts[symbol] = {"50": False, "80": False, "100": False}
-
-    mapping = {45: "50", 75: "80", 95: "100"}
-
     for threshold in THRESHOLDS:
-        key = mapping[threshold]
+        if change >= threshold:
+            send_telegram(f"🚀 {symbol} günlük %{change:.2f} yükseldi! (>{threshold}%)")
 
-        if change >= threshold and not sent_alerts[symbol][key]:
-            send_telegram(f"🚀 {symbol} günlük %{change:.2f} yükseldi! (>{key}%)")
-            sent_alerts[symbol][key] = True
-
-    save_alerts()
-
-# ---------------------- BINANCE FUTURES ----------------------
+# ------------------ BINANCE ------------------
 
 def fetch_binance():
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
@@ -69,19 +40,17 @@ def check_binance():
 
         change = float(coin.get("priceChangePercent", 0))
 
-        # Eğer UI %50 ise API %45-49 arasında olur → tolerans kullanıyoruz
         if change >= 45:
-            time.sleep(2)  # Gecikme fix
-            data2 = fetch_binance()
+            time.sleep(2)
+            final_data = fetch_binance()
+            match = next((c for c in final_data if c.get("symbol") == symbol), None)
 
-            match = next((c for c in data2 if c.get("symbol") == symbol), None)
             if match:
                 final_change = float(match.get("priceChangePercent", 0))
-
                 if final_change >= 45:
                     check_thresholds(symbol, final_change)
 
-# ---------------------- MEXC FUTURES ----------------------
+# ------------------ MEXC ------------------
 
 def fetch_mexc():
     url = "https://contract.mexc.com/api/v1/contract/ticker"
@@ -106,7 +75,6 @@ def check_mexc():
         if change >= 45:
             time.sleep(2)
             r2 = fetch_mexc()
-
             if r2.get("success") != True:
                 continue
 
@@ -116,7 +84,7 @@ def check_mexc():
                 if final_change >= 45:
                     check_thresholds(symbol, final_change)
 
-# ---------------------- MAIN ----------------------
+# ------------------ MAIN ------------------
 
 def main():
     send_telegram("🔎 Pump radar çalıştı (Binance + MEXC).")
