@@ -10,9 +10,10 @@ def send_telegram(msg):
     data = {
         "chat_id": CHAT_ID,
         "text": msg,
-        "parse_mode": None   # <-- TELEGRAM FORMAT PARSE KAPALI
+        "parse_mode": ""   # <-- PARSE TAMAMEN KAPALI
     }
     requests.post(url, data=data)
+
 
 
 # EŞİKLER (UI–API farkı için toleranslı)
