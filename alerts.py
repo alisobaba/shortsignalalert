@@ -10,13 +10,11 @@ def send_telegram(msg):
     data = {
         "chat_id": CHAT_ID,
         "text": msg,
-        "parse_mode": ""  # güvenli mod
     }
     requests.post(url, data=data)
 
 
 # ------------------ EŞİKLER ------------------
-# Gösterilecek değer – API tetik eşiği
 THRESHOLDS = [
     (50, 48),
     (75, 73),
@@ -25,16 +23,13 @@ THRESHOLDS = [
 
 
 def check_thresholds(symbol, change):
-    """
-    Coin eşikleri geçince telegram uyarı yollar
-    """
-    for display_threshold, api_threshold in THRESHOLDS:
-        if change >= api_threshold:
+    for display_t, api_t in THRESHOLDS:
+        if change >= api_t:
             msg = (
                 f"🚀 MEXC Futures Pump Alert!\n"
                 f"Coin: {symbol}\n"
                 f"Yükseliş: %{change:.2f}\n"
-                f"Eşik: >{display_threshold}%"
+                f"Eşik: >{display_t}%"
             )
             send_telegram(msg)
 
@@ -42,9 +37,6 @@ def check_thresholds(symbol, change):
 # ------------------ MEXC FUTURES ------------------
 
 def fetch_mexc():
-    """
-    MEXC Futures tüm coin listesini çeker
-    """
     url = "https://contract.mexc.com/api/v1/contract/ticker"
     try:
         return requests.get(url, timeout=5).json()
@@ -53,26 +45,20 @@ def fetch_mexc():
 
 
 def check_mexc():
-    """
-    MEXC Pump Radar
-    """
     r = fetch_mexc()
     if r.get("success") != True:
-        print("[MEXC ERROR] Response hatalı:", r)
+        print("[MEXC ERROR]", r)
         return
 
     for coin in r.get("data", []):
         try:
-            raw_symbol = coin.get("symbol", "")  # örn: BTC_USDT
-            if not raw_symbol.endswith("_USDT"):
+            raw = coin.get("symbol", "")
+            if not raw.endswith("_USDT"):
                 continue
 
-            # Sembol formatı dönüşümü: BTC_USDT → BTCUSDT
-            symbol = raw_symbol.replace("_", "")
-
+            symbol = raw.replace("_", "")
             change = float(coin.get("riseFallRate", 0))
 
-            # %48 geçtiyse ekstra doğrulama
             if change >= 48:
                 time.sleep(1)
                 r2 = fetch_mexc()
@@ -80,7 +66,7 @@ def check_mexc():
                     continue
 
                 match = next((c for c in r2.get("data", [])
-                              if c.get("symbol") == raw_symbol), None)
+                              if c.get("symbol") == raw), None)
 
                 if match:
                     final_change = float(match.get("riseFallRate", 0))
@@ -91,11 +77,24 @@ def check_mexc():
             print("[MEXC ERROR]", e)
 
 
+# ------------------ TEST MOD ------------------
+
+def test_message():
+    send_telegram("🧪 *TEST* — Sistem çalışıyor!")
+    print("Test mesaj gönderildi.")
+
+
 # ------------------ MAIN ------------------
 
 def main():
     print("==== MEXC PUMP RADAR BAŞLADI ====")
+
+    # İlk çalıştırmada test mesajı
+    test_message()
+
+    # Normal çalıştırma
     check_mexc()
+
     print("==== BİTTİ ====")
 
 
