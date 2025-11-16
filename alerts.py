@@ -1,6 +1,7 @@
 import requests
 import os
 import json
+import time
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -29,30 +30,38 @@ def send_telegram(msg):
 
 # ---------------------- CHECK THRESHOLDS ----------------------
 
-THRESHOLDS = [50, 80, 100]
+# Tolerans eklendi → %49.5, %79.5, %99.5
+THRESHOLDS = [49.5, 79.5, 99.5]
 
 def check_thresholds(symbol, change):
-    # Create entry if not exists
     if symbol not in sent_alerts:
         sent_alerts[symbol] = {"50": False, "80": False, "100": False}
 
-    for threshold in THRESHOLDS:
-        key = str(threshold)
+    # threshold key mapping
+    mapping = {49.5: "50", 79.5: "80", 99.5: "100"}
 
-        # If coin crosses threshold and alert wasn't sent
+    for threshold in THRESHOLDS:
+        key = mapping[threshold]
+
         if change >= threshold and not sent_alerts[symbol][key]:
-            send_telegram(f"🚀 {symbol} günlük %{change:.2f} yükseldi! (>{threshold}%)")
+            send_telegram(f"🚀 {symbol} günlük %{change:.2f} yükseldi! (>{key}%)")
             sent_alerts[symbol][key] = True
 
     save_alerts()
 
 # ---------------------- BINANCE FUTURES ----------------------
 
-def check_binance():
+def fetch_binance():
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-    r = requests.get(url).json()
+    try:
+        return requests.get(url, timeout=5).json()
+    except:
+        return []
 
-    for coin in r:
+def check_binance():
+    data = fetch_binance()
+
+    for coin in data:
         if not isinstance(coin, dict):
             continue
 
@@ -62,14 +71,28 @@ def check_binance():
 
         change = float(coin.get("priceChangePercent", 0))
 
-        if change >= 50:
-            check_thresholds(symbol, change)
+        if change >= 49.5:
+            # Binance API gecikmesi için ikinci kontrol
+            time.sleep(3)
+            data2 = fetch_binance()
+            match = next((c for c in data2 if c.get("symbol") == symbol), None)
+
+            if match:
+                final_change = float(match.get("priceChangePercent", 0))
+                if final_change >= 49.5:
+                    check_thresholds(symbol, final_change)
 
 # ---------------------- MEXC FUTURES ----------------------
 
-def check_mexc():
+def fetch_mexc():
     url = "https://contract.mexc.com/api/v1/contract/ticker"
-    r = requests.get(url).json()
+    try:
+        return requests.get(url, timeout=5).json()
+    except:
+        return {"success": False, "data": []}
+
+def check_mexc():
+    r = fetch_mexc()
 
     if r.get("success") != True:
         return
@@ -79,13 +102,22 @@ def check_mexc():
         if not symbol.endswith("_USDT"):
             continue
 
-        # Convert symbol to match Binance style: BTC_USDT → BTCUSDT
         symbol = symbol.replace("_", "")
-
         change = float(coin.get("riseFallRate", 0))
 
-        if change >= 50:
-            check_thresholds(symbol, change)
+        if change >= 49.5:
+            time.sleep(3)
+            r2 = fetch_mexc()
+
+            if r2.get("success") != True:
+                continue
+
+            match = next((c for c in r2.get("data", []) if c.get("symbol") == coin.get("symbol")), None)
+
+            if match:
+                final_change = float(match.get("riseFallRate", 0))
+                if final_change >= 49.5:
+                    check_thresholds(symbol, final_change)
 
 # ---------------------- MAIN ----------------------
 
