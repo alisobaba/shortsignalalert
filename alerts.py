@@ -10,93 +10,89 @@ def send_telegram(msg):
     data = {
         "chat_id": CHAT_ID,
         "text": msg,
+        "parse_mode": ""
     }
-    requests.post(url, data=data)
+    try:
+        requests.post(url, data=data, timeout=5)
+    except Exception as e:
+        print("Telegram gönderim hatası:", e)
 
+# ============================================================
+#                    EŞİK LİSTESİ (%)
+# ============================================================
 
-# ------------------ EŞİKLER ------------------
+# Görünen %   –   API kontrol eşiği
 THRESHOLDS = [
     (50, 48),
     (75, 73),
-    (100, 98)
+    (100, 98),
 ]
 
-
-def check_thresholds(symbol, change):
-    for display_t, api_t in THRESHOLDS:
-        if change >= api_t:
-            msg = (
-                f"🚀 MEXC Futures Pump Alert!\n"
-                f"Coin: {symbol}\n"
-                f"Yükseliş: %{change:.2f}\n"
-                f"Eşik: >{display_t}%"
+def check_thresholds(symbol, price, change):
+    for display, api in THRESHOLDS:
+        if change >= api:
+            send_telegram(
+                f"🚀 {symbol}\n"
+                f"📈 Fiyat: {price}\n"
+                f"🔥 24h Değişim: %{change:.2f}\n"
+                f"(>{display}% eşiği aşıldı!)"
             )
-            send_telegram(msg)
+            print(f"[ALERT] {symbol} %{change:.2f} gönderildi")
 
 
-# ------------------ MEXC FUTURES ------------------
+# ============================================================
+#                       MEXC API
+# ============================================================
 
 def fetch_mexc():
     url = "https://contract.mexc.com/api/v1/contract/ticker"
     try:
-        return requests.get(url, timeout=5).json()
+        r = requests.get(url, timeout=5).json()
+        if r.get("success") is True:
+            return r.get("data", [])
+        return []
     except:
-        return {"success": False, "data": []}
-
+        return []
 
 def check_mexc():
-    r = fetch_mexc()
-    if r.get("success") != True:
-        print("[MEXC ERROR]", r)
-        return
+    print("==== MEXC KONTROL BAŞLADI ====")
+    data = fetch_mexc()
 
-    for coin in r.get("data", []):
-        try:
-            raw = coin.get("symbol", "")
-            if not raw.endswith("_USDT"):
-                continue
+    for coin in data:
+        raw_symbol = coin.get("symbol", "")
+        if not raw_symbol.endswith("_USDT"):
+            continue
 
-            symbol = raw.replace("_", "")
-            change = float(coin.get("riseFallRate", 0))
+        symbol = raw_symbol.replace("_", "")
+        price = coin.get("lastPrice", 0)
+        change = float(coin.get("riseFallRate", 0))
 
-            if change >= 48:
-                time.sleep(1)
-                r2 = fetch_mexc()
-                if r2.get("success") != True:
-                    continue
+        # Eşik denenir
+        if change >= 48:
+            print(f"[CHECK-1] {symbol} %{change}")
 
-                match = next((c for c in r2.get("data", [])
-                              if c.get("symbol") == raw), None)
+            # İkinci doğrulama
+            time.sleep(2)
+            data2 = fetch_mexc()
+            match = next((c for c in data2 if c.get("symbol") == raw_symbol), None)
 
-                if match:
-                    final_change = float(match.get("riseFallRate", 0))
-                    if final_change >= 48:
-                        check_thresholds(symbol, final_change)
+            if match:
+                final_change = float(match.get("riseFallRate", 0))
+                final_price = match.get("lastPrice", price)
 
-        except Exception as e:
-            print("[MEXC ERROR]", e)
+                if final_change >= 48:
+                    print(f"[CHECK-2] {symbol} %{final_change} doğrulandı")
+                    check_thresholds(symbol, final_price, final_change)
 
-
-# ------------------ TEST MOD ------------------
-
-def test_message():
-    send_telegram("🧪 *TEST* — Sistem çalışıyor!")
-    print("Test mesaj gönderildi.")
+    print("==== MEXC KONTROL BİTTİ ====")
 
 
-# ------------------ MAIN ------------------
+# ============================================================
+#                       MAIN
+# ============================================================
 
 def main():
-    print("==== MEXC PUMP RADAR BAŞLADI ====")
-
-    # İlk çalıştırmada test mesajı
-    test_message()
-
-    # Normal çalıştırma
     check_mexc()
-
-    print("==== BİTTİ ====")
-
 
 if __name__ == "__main__":
     main()
