@@ -7,8 +7,24 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": msg}
+    data = {
+        "chat_id": CHAT_ID,
+        "text": msg,
+        "parse_mode": "MarkdownV2",   # ← TELEGRAM FORMAT KORUMASI
+        "disable_web_page_preview": True
+    }
+    # Telegram'ın özel karakter kaçışları için:
+    safe_msg = (
+        msg.replace("-", "\\-")
+           .replace(".", "\\.")
+           .replace("(", "\\(")
+           .replace(")", "\\)")
+           .replace("%", "\\%")
+           .replace(">", "\\>")
+    )
+    data["text"] = safe_msg
     requests.post(url, data=data)
+
 
 # EŞİKLER (UI–API farkı için toleranslı)
 THRESHOLDS = [45, 75, 95]
