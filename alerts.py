@@ -29,16 +29,14 @@ def send_telegram(msg):
     requests.post(url, data=data)
 
 # ---------------------- CHECK THRESHOLDS ----------------------
-
-# Tolerans eklendi → %49.5, %79.5, %99.5
-THRESHOLDS = [49.5, 79.5, 99.5]
+# Tolerans eklendi → UI 50 = API 45-49 olabilir
+THRESHOLDS = [45, 75, 95]
 
 def check_thresholds(symbol, change):
     if symbol not in sent_alerts:
         sent_alerts[symbol] = {"50": False, "80": False, "100": False}
 
-    # threshold key mapping
-    mapping = {49.5: "50", 79.5: "80", 99.5: "100"}
+    mapping = {45: "50", 75: "80", 95: "100"}
 
     for threshold in THRESHOLDS:
         key = mapping[threshold]
@@ -71,15 +69,16 @@ def check_binance():
 
         change = float(coin.get("priceChangePercent", 0))
 
-        if change >= 49.5:
-            # Binance API gecikmesi için ikinci kontrol
-            time.sleep(3)
+        # Eğer UI %50 ise API %45-49 arasında olur → tolerans kullanıyoruz
+        if change >= 45:
+            time.sleep(2)  # Gecikme fix
             data2 = fetch_binance()
-            match = next((c for c in data2 if c.get("symbol") == symbol), None)
 
+            match = next((c for c in data2 if c.get("symbol") == symbol), None)
             if match:
                 final_change = float(match.get("priceChangePercent", 0))
-                if final_change >= 49.5:
+
+                if final_change >= 45:
                     check_thresholds(symbol, final_change)
 
 # ---------------------- MEXC FUTURES ----------------------
@@ -93,7 +92,6 @@ def fetch_mexc():
 
 def check_mexc():
     r = fetch_mexc()
-
     if r.get("success") != True:
         return
 
@@ -105,18 +103,17 @@ def check_mexc():
         symbol = symbol.replace("_", "")
         change = float(coin.get("riseFallRate", 0))
 
-        if change >= 49.5:
-            time.sleep(3)
+        if change >= 45:
+            time.sleep(2)
             r2 = fetch_mexc()
 
             if r2.get("success") != True:
                 continue
 
             match = next((c for c in r2.get("data", []) if c.get("symbol") == coin.get("symbol")), None)
-
             if match:
                 final_change = float(match.get("riseFallRate", 0))
-                if final_change >= 49.5:
+                if final_change >= 45:
                     check_thresholds(symbol, final_change)
 
 # ---------------------- MAIN ----------------------
