@@ -5,6 +5,9 @@ import time
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+print("DEBUG TOKEN:", TELEGRAM_TOKEN)
+print("DEBUG CHAT:", CHAT_ID)
+
 def send_telegram(msg):
     if not TELEGRAM_TOKEN or not CHAT_ID:
         print("TELEGRAM TOKEN/CHAT ID BOŞ! MESAJ GÖNDERİLMEDİ")
