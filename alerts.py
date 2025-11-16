@@ -101,9 +101,9 @@ def check_mexc():
 # ------------------ MAIN ------------------
 
 def main():
-    send_telegram("🔎 Pump radar çalıştı (Binance + MEXC).")
     check_binance()
     check_mexc()
+
 
 if __name__ == "__main__":
     main()
