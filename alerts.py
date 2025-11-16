@@ -4,7 +4,7 @@ import json
 import time
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_IDS = os.getenv("CHAT_ID", "").split(",")
+CHAT_IDS = os.getenv("CHAT_ID")
 
 ALERT_FILE = "sent_alerts.json"
 
