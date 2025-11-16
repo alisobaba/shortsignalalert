@@ -2,12 +2,18 @@ name: Binance Alerts
 
 on:
   schedule:
-    - cron: "*/2 * * * *"
-  workflow_dispatch:
+    - cron: "*/1 * * * *"   # her 1 dakikada bir çalışsın
+  workflow_dispatch:        # elle çalıştırma
+
+# 🔥 BURASI ZORUNLU — yoksa secrets scheduled run'da okunmaz!
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
+
     steps:
       - name: Repo indiriliyor
         uses: actions/checkout@v3
@@ -19,6 +25,14 @@ jobs:
 
       - name: Kütüphaneleri kur
         run: pip install requests
+
+      - name: Debug secrets
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          echo "DEBUG TOKEN = ${TELEGRAM_TOKEN}"
+          echo "DEBUG CHATID = ${CHAT_ID}"
 
       - name: Scripti çalıştır
         env:
