@@ -2,13 +2,8 @@ name: Binance Alerts
 
 on:
   schedule:
-    - cron: "*/1 * * * *"   # her 1 dakikada bir çalışsın
-  workflow_dispatch:        # elle çalıştırma
-
-# 🔥 BURASI ZORUNLU — yoksa secrets scheduled run'da okunmaz!
-permissions:
-  contents: read
-  id-token: write
+    - cron: "*/2 * * * *"
+  workflow_dispatch:
 
 jobs:
   run-script:
@@ -27,15 +22,15 @@ jobs:
         run: pip install requests
 
       - name: Debug secrets
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
           echo "DEBUG TOKEN = ${TELEGRAM_TOKEN}"
           echo "DEBUG CHATID = ${CHAT_ID}"
-
-      - name: Scripti çalıştır
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python alerts.py
+
+      - name: Scripti çalıştır (UNBUFFERED LOG)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python -u alerts.py
