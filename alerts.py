@@ -6,106 +6,97 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 def send_telegram(msg):
-    print("[TELEGRAM] Sending:", msg, flush=True)
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {
         "chat_id": CHAT_ID,
         "text": msg,
-        "parse_mode": ""
+        "parse_mode": ""  # güvenli mod
     }
-    try:
-        requests.post(url, data=data, timeout=5)
-    except Exception as e:
-        print("[TELEGRAM ERROR]", e, flush=True)
+    requests.post(url, data=data)
 
 
 # ------------------ EŞİKLER ------------------
+# Gösterilecek değer – API tetik eşiği
 THRESHOLDS = [
     (50, 48),
     (75, 73),
     (100, 98)
 ]
 
-def check_thresholds(symbol, change):
-    print(f"[CHECK_THRESHOLDS] {symbol} → %{change}", flush=True)
 
-    for display, real in THRESHOLDS:
-        if change >= real:
-            msg = f"🚀 COIN: {symbol}\n24h Change: %{change:.2f}\nThreshold: >{display}%"
+def check_thresholds(symbol, change):
+    """
+    Coin eşikleri geçince telegram uyarı yollar
+    """
+    for display_threshold, api_threshold in THRESHOLDS:
+        if change >= api_threshold:
+            msg = (
+                f"🚀 MEXC Futures Pump Alert!\n"
+                f"Coin: {symbol}\n"
+                f"Yükseliş: %{change:.2f}\n"
+                f"Eşik: >{display_threshold}%"
+            )
             send_telegram(msg)
 
 
-# ------------------ BINANCE ------------------
+# ------------------ MEXC FUTURES ------------------
 
-def fetch_binance():
-    print("[FETCH] Binance verisi alınıyor...", flush=True)
-    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-
+def fetch_mexc():
+    """
+    MEXC Futures tüm coin listesini çeker
+    """
+    url = "https://contract.mexc.com/api/v1/contract/ticker"
     try:
-        data = requests.get(url, timeout=5).json()
-
-        # RATE LIMIT KONTROL
-        if isinstance(data, dict) and "code" in data:
-            print("[BINANCE WARNING] API limit / Error:", data, flush=True)
-            return None
-
-        if isinstance(data, list):
-            print(f"[BINANCE SAMPLE] {len(data)} kayıt geldi", flush=True)
-            return data
-
-        print("[BINANCE ERROR] API beklenmeyen format:", data, flush=True)
-        return None
-
-    except Exception as e:
-        print("[BINANCE EXCEPTION]", e, flush=True)
-        return None
+        return requests.get(url, timeout=5).json()
+    except:
+        return {"success": False, "data": []}
 
 
-def check_binance():
-    data = fetch_binance()
-    if data is None:
+def check_mexc():
+    """
+    MEXC Pump Radar
+    """
+    r = fetch_mexc()
+    if r.get("success") != True:
+        print("[MEXC ERROR] Response hatalı:", r)
         return
 
-    for coin in data:
-        if not isinstance(coin, dict):
-            continue
-
-        symbol = coin.get("symbol", "")
-        if not symbol.endswith("USDT"):
-            continue
-
-        change = float(coin.get("priceChangePercent", 0))
-
-        print(f"[BINANCE] {symbol}: %{change}", flush=True)
-
-        if change >= 48:
-            print(f"[BINANCE] {symbol} teyit ediliyor...", flush=True)
-            time.sleep(2)
-
-            data2 = fetch_binance()
-            if data2 is None:
+    for coin in r.get("data", []):
+        try:
+            raw_symbol = coin.get("symbol", "")  # örn: BTC_USDT
+            if not raw_symbol.endswith("_USDT"):
                 continue
 
-            match = next((c for c in data2 if c.get("symbol") == symbol), None)
+            # Sembol formatı dönüşümü: BTC_USDT → BTCUSDT
+            symbol = raw_symbol.replace("_", "")
 
-            if match:
-                final_change = float(match.get("priceChangePercent", 0))
-                print(f"[CONFIRMED] {symbol}: %{final_change}", flush=True)
+            change = float(coin.get("riseFallRate", 0))
 
-                if final_change >= 48:
-                    check_thresholds(symbol, final_change)
+            # %48 geçtiyse ekstra doğrulama
+            if change >= 48:
+                time.sleep(1)
+                r2 = fetch_mexc()
+                if r2.get("success") != True:
+                    continue
+
+                match = next((c for c in r2.get("data", [])
+                              if c.get("symbol") == raw_symbol), None)
+
+                if match:
+                    final_change = float(match.get("riseFallRate", 0))
+                    if final_change >= 48:
+                        check_thresholds(symbol, final_change)
+
+        except Exception as e:
+            print("[MEXC ERROR]", e)
 
 
 # ------------------ MAIN ------------------
 
 def main():
-    print("==== SCRIPT BAŞLADI ====", flush=True)
-    print("TOKEN OK:", TELEGRAM_TOKEN is not None, flush=True)
-    print("CHAT OK:", CHAT_ID is not None, flush=True)
-
-    check_binance()
-
-    print("==== BİTTİ ====", flush=True)
+    print("==== MEXC PUMP RADAR BAŞLADI ====")
+    check_mexc()
+    print("==== BİTTİ ====")
 
 
 if __name__ == "__main__":
