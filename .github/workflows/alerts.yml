@@ -2,7 +2,7 @@ name: MEXC Alerts
 
 on:
   schedule:
-    - cron: "*/2 * * * *"   # Her 2 dakikada bir çalışır
+    - cron: "*/1 * * * *"   # Her 2 dakikada bir çalışır
   workflow_dispatch:
 
 jobs:
