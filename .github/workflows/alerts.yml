@@ -2,16 +2,24 @@ name: MEXC Alerts
 
 on:
   schedule:
-    - cron: "*/1 * * * *"   # Her 2 dakikada bir çalışır
+    # GitHub'da en sık periyot 5 dakikadır. 
+    # '*/1' yazsan bile GitHub bunu 5-10 dk arayla çalıştırır.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
+
+# Bu izinler dosya kaydetmek (git push) için ŞARTTIR
+permissions:
+  contents: write
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Repo indiriliyor
+      - name: Repo indiriliyor (Checkout)
         uses: actions/checkout@v3
+        with:
+          persist-credentials: true # Git push yapabilmek için gerekli
 
       - name: Python kurulumu
         uses: actions/setup-python@v4
@@ -26,3 +34,17 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: python alerts.py
+
+      # --- İŞTE EKSİK OLAN SİHİRLİ KISIM BURASI ---
+      - name: Kayıtları Github'a İşle (Commit & Push)
+        run: |
+          git config --global user.name 'GitHub Action Bot'
+          git config --global user.email 'action@github.com'
+          
+          # Eğer sent_alerts.json yoksa oluştur (hata vermemesi için)
+          if [ ! -f sent_alerts.json ]; then echo "{}" > sent_alerts.json; fi
+          
+          git add sent_alerts.json
+          
+          # Eğer değişiklik varsa commit et, yoksa hata verme
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update alerts memory" && git push)
